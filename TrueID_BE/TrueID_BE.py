@@ -1,34 +1,33 @@
-"""Welcome to Reflex! This file outlines the steps to create a basic app."""
-
 import reflex as rx
 
-from rxconfig import config
-
-
-class State(rx.State):
-    """The app state."""
-
-
 def index() -> rx.Component:
-    # Welcome Page (Index)
-    return rx.container(
-        rx.color_mode.button(position="top-right"),
+    return rx.box(
         rx.vstack(
-            rx.heading("Welcome to Reflex!", size="9"),
+            rx.badge("TrueID backend console", color_scheme="amber", variant="surface"),
+            rx.heading("Caller identity API is ready.", size="8"),
             rx.text(
-                "Get started by editing ",
-                rx.code(f"{config.app_name}/{config.app_name}.py"),
-                size="5",
+                "Use FastAPI for the mobile-facing API and keep this Reflex page as a lightweight internal console placeholder.",
+                size="4",
+                color_scheme="gray",
             ),
-            rx.link(
-                rx.button("Check out our docs!"),
-                href="https://reflex.dev/docs/getting-started/introduction/",
-                is_external=True,
+            rx.vstack(
+                rx.text("GET /health"),
+                rx.text("POST /api/v1/lookup"),
+                rx.text("POST /api/v1/report-spam"),
+                rx.text("POST /api/v1/upload-contacts"),
+                align="start",
+                spacing="2",
+                width="100%",
             ),
-            spacing="5",
-            justify="center",
-            min_height="85vh",
+            rx.link("Open FastAPI docs", href="http://localhost:8000/docs", is_external=True),
+            align="start",
+            spacing="6",
+            width="100%",
+            max_width="720px",
         ),
+        padding="48px",
+        min_height="100vh",
+        background="linear-gradient(180deg, #fffaf0 0%, #f4efe3 100%)",
     )
 
 
