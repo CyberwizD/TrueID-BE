@@ -36,7 +36,7 @@ class Settings(BaseSettings):
     def resolved_backend(self) -> Literal["memory", "supabase"]:
         if self.data_backend == "memory":
             return "memory"
-        if self.data_backend == "supabase":
+        if self.data_backend == "supabase" and self.has_supabase_credentials:
             return "supabase"
         return "supabase" if self.has_supabase_credentials else "memory"
 
