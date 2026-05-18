@@ -1,4 +1,5 @@
 import reflex as rx
+from TrueID_BE.api import app as fastapi_app
 
 def index() -> rx.Component:
     return rx.box(
@@ -19,7 +20,7 @@ def index() -> rx.Component:
                 spacing="2",
                 width="100%",
             ),
-            rx.link("Open FastAPI docs", href="http://localhost:8000/docs", is_external=True),
+            rx.link("Open API docs", href="/docs", is_external=True),
             align="start",
             spacing="6",
             width="100%",
@@ -30,6 +31,5 @@ def index() -> rx.Component:
         background="linear-gradient(180deg, #fffaf0 0%, #f4efe3 100%)",
     )
 
-
-app = rx.App()
+app = rx.App(api_transformer=fastapi_app)
 app.add_page(index)
