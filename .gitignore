@@ -4,3 +4,5 @@ assets/external/
 *.py[cod]
 *.db
 .states
+.env
+*.log
