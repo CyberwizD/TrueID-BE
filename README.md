@@ -37,13 +37,29 @@ Create a `.env` file if you want Supabase instead of the built-in memory reposit
 ```env
 SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_SECRET_KEY=your-secret-key
+SUPABASE_DB_URL=postgresql://postgres:password@db.project-ref.supabase.co:5432/postgres
 TRUEID_DATA_BACKEND=auto
+TRUEID_AUTO_MIGRATE=true
 TRUEID_ALLOWED_ORIGINS=http://localhost:8081,http://localhost:19006
 ```
 
 If Supabase credentials are missing, the API falls back to seeded memory data.
 
 `sb_publishable_...` keys are public client keys and are not treated as backend admin credentials. Use `SUPABASE_SECRET_KEY` or a legacy `SUPABASE_SERVICE_ROLE_KEY` instead.
+
+`SUPABASE_SECRET_KEY` is used for runtime reads and writes through the Supabase API.
+`SUPABASE_DB_URL` or `DATABASE_URL` is used for schema migrations through direct Postgres access.
+
+## Schema migrations
+
+Schema creation and upgrades are tracked in `supabase/migrations/`.
+On startup, the backend applies any unapplied migration automatically when:
+
+- `TRUEID_DATA_BACKEND=supabase`
+- `TRUEID_AUTO_MIGRATE=true`
+- `SUPABASE_DB_URL` or `DATABASE_URL` is configured
+
+No demo seed data is applied automatically.
 
 ## Reflex cloud
 
