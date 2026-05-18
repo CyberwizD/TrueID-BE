@@ -77,7 +77,7 @@ class SupabaseRepository(BaseRepository):
 
         self._client: Client = create_client(
             settings.supabase_url or "",
-            settings.supabase_service_role_key or "",
+            settings.supabase_admin_key or "",
         )
 
     def get_profile(self, phone_number: str) -> CallerProfileRecord | None:
