@@ -198,7 +198,10 @@ class SupabaseRepository(BaseRepository):
 
 def build_repository(settings: Settings) -> BaseRepository:
     if settings.resolved_backend == "supabase":
-        return SupabaseRepository(settings)
+        try:
+            return SupabaseRepository(settings)
+        except ImportError:
+            return InMemoryRepository()
     return InMemoryRepository()
 
 
