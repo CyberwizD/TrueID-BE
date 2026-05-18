@@ -26,7 +26,7 @@ The MVP intentionally returns coarse location only, such as `Lekki, Lagos`. It d
 ## Local run
 
 ```bash
-pip install -e .[dev]
+pip install -r requirements.txt
 python main.py
 ```
 
@@ -41,9 +41,8 @@ TRUEID_DATA_BACKEND=auto
 TRUEID_ALLOWED_ORIGINS=http://localhost:8081,http://localhost:19006
 ```
 
-If Supabase credentials are missing, the API starts in seeded demo mode using in-memory data.
+If Supabase credentials are missing, the API falls back to seeded memory data.
 
-## Optional extras
+## Reflex cloud
 
-- `pip install -e .[supabase]` to enable the Supabase repository.
-- `pip install -e .[dashboard]` to use the Reflex console page.
+Reflex cloud now installs from `requirements.txt`, which avoids local package build discovery errors during deployment.
