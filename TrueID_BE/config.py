@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     app_version: str = "0.1.0"
     api_prefix: str = "/api/v1"
     environment: Literal["development", "staging", "production"] = "development"
-    allowed_origins: str = "http://localhost:8081,http://localhost:19006,http://localhost:3000"
+    allowed_origins: str = "*"
     data_backend: Literal["auto", "memory", "supabase"] = "auto"
     default_country: str = "Nigeria"
     spam_threshold: int = 55
