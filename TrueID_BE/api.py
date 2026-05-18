@@ -10,7 +10,7 @@ from starlette.responses import JSONResponse
 from starlette.routing import Route
 
 from TrueID_BE.config import Settings, get_settings
-from TrueID_BE.repository import BaseRepository, build_repository
+from TrueID_BE.repository import BaseRepository, MissingSupabaseSchemaError, build_repository
 from TrueID_BE.schemas import (
     HealthResponse,
     LookupRequest,
@@ -111,5 +111,13 @@ async def http_exception_handler(request: Request, exc: HTTPException) -> JSONRe
     return JSONResponse({"detail": exc.detail}, status_code=exc.status_code)
 
 
+async def missing_schema_exception_handler(
+    request: Request,
+    exc: MissingSupabaseSchemaError,
+) -> JSONResponse:
+    return JSONResponse({"detail": str(exc)}, status_code=503)
+
+
 app = create_app()
 app.add_exception_handler(HTTPException, http_exception_handler)
+app.add_exception_handler(MissingSupabaseSchemaError, missing_schema_exception_handler)
