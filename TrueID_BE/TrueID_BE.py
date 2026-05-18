@@ -20,7 +20,11 @@ def index() -> rx.Component:
                 spacing="2",
                 width="100%",
             ),
-            rx.link("Open API docs", href="/docs", is_external=True),
+            rx.text(
+                "Deploy this Reflex app and use the same host for the mobile API base URL.",
+                size="3",
+                color_scheme="gray",
+            ),
             align="start",
             spacing="6",
             width="100%",
