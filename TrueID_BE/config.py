@@ -17,6 +17,9 @@ class Settings(BaseSettings):
     supabase_url: str | None = None
     supabase_service_role_key: str | None = None
     supabase_secret_key: str | None = None
+    database_url: str | None = None
+    supabase_db_url: str | None = None
+    auto_migrate: bool = True
 
     @field_validator("environment", mode="before")
     @classmethod
@@ -57,6 +60,10 @@ class Settings(BaseSettings):
             return "supabase"
         return "supabase" if self.has_supabase_credentials else "memory"
 
+    @property
+    def migration_database_url(self) -> str | None:
+        return self.database_url or self.supabase_db_url
+
 
 @lru_cache
 def get_settings() -> Settings:
@@ -64,6 +71,8 @@ def get_settings() -> Settings:
         supabase_url=_read_passthrough_env("SUPABASE_URL"),
         supabase_service_role_key=_read_passthrough_env("SUPABASE_SERVICE_ROLE_KEY"),
         supabase_secret_key=_read_passthrough_env("SUPABASE_SECRET_KEY"),
+        database_url=_read_passthrough_env("DATABASE_URL"),
+        supabase_db_url=_read_passthrough_env("SUPABASE_DB_URL"),
     )
 
 
