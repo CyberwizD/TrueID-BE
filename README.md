@@ -36,13 +36,17 @@ Create a `.env` file if you want Supabase instead of the built-in memory reposit
 
 ```env
 SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+SUPABASE_SECRET_KEY=your-secret-key
 TRUEID_DATA_BACKEND=auto
 TRUEID_ALLOWED_ORIGINS=http://localhost:8081,http://localhost:19006
 ```
 
 If Supabase credentials are missing, the API falls back to seeded memory data.
 
+`sb_publishable_...` keys are public client keys and are not treated as backend admin credentials. Use `SUPABASE_SECRET_KEY` or a legacy `SUPABASE_SERVICE_ROLE_KEY` instead.
+
 ## Reflex cloud
 
 Reflex cloud now installs from `requirements.txt`, which avoids local package build discovery errors during deployment.
+
+Reflex Cloud or Fly will not read your local `.env` automatically unless you pass it during deploy or set the values in the hosted app's secrets/settings UI.
