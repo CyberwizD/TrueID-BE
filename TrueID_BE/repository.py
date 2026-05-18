@@ -6,8 +6,13 @@ from copy import deepcopy
 from datetime import datetime, timezone
 
 from TrueID_BE.config import Settings
+from TrueID_BE.migrations import ensure_schema
 from TrueID_BE.schemas import CallerProfileRecord, ContactContributionRecord, SpamReportRecord
 from TrueID_BE.seeds import SEED_CONTRIBUTIONS, SEED_PROFILES, SEED_REPORTS
+
+
+class MissingSupabaseSchemaError(RuntimeError):
+    """Raised when the configured Supabase project is missing required tables."""
 
 
 class BaseRepository(ABC):
@@ -81,12 +86,11 @@ class SupabaseRepository(BaseRepository):
         )
 
     def get_profile(self, phone_number: str) -> CallerProfileRecord | None:
-        response = (
+        response = self._execute(
             self._client.table("caller_profiles")
             .select("*")
             .eq("phone_number", phone_number)
             .limit(1)
-            .execute()
         )
         if not response.data:
             return None
@@ -106,11 +110,10 @@ class SupabaseRepository(BaseRepository):
         )
 
     def get_contributions(self, phone_number: str) -> list[ContactContributionRecord]:
-        response = (
+        response = self._execute(
             self._client.table("contact_contributions")
             .select("*")
             .eq("phone_number", phone_number)
-            .execute()
         )
         return [
             ContactContributionRecord(
@@ -126,11 +129,10 @@ class SupabaseRepository(BaseRepository):
         ]
 
     def get_spam_reports(self, phone_number: str) -> list[SpamReportRecord]:
-        response = (
+        response = self._execute(
             self._client.table("spam_reports")
             .select("*")
             .eq("phone_number", phone_number)
-            .execute()
         )
         return [
             SpamReportRecord(
@@ -145,7 +147,7 @@ class SupabaseRepository(BaseRepository):
         ]
 
     def save_spam_report(self, report: SpamReportRecord) -> None:
-        self._client.table("spam_reports").insert(
+        self._execute(self._client.table("spam_reports").insert(
             {
                 "id": report.id,
                 "phone_number": report.phone_number,
@@ -154,17 +156,18 @@ class SupabaseRepository(BaseRepository):
                 "notes": report.notes,
                 "created_at": report.created_at.isoformat(),
             }
-        ).execute()
+        ))
 
     def save_contact_contributions(self, contributions: list[ContactContributionRecord]) -> tuple[int, int]:
         grouped_existing = defaultdict(set)
         phone_numbers = sorted({item.phone_number for item in contributions})
         if phone_numbers:
             response = (
-                self._client.table("contact_contributions")
-                .select("user_id, phone_number, contact_name")
-                .in_("phone_number", phone_numbers)
-                .execute()
+                self._execute(
+                    self._client.table("contact_contributions")
+                    .select("user_id, phone_number, contact_name")
+                    .in_("phone_number", phone_numbers)
+                )
             )
             for row in response.data or []:
                 grouped_existing[row["phone_number"]].add(
@@ -192,13 +195,28 @@ class SupabaseRepository(BaseRepository):
             grouped_existing[contribution.phone_number].add(existing_key)
 
         if payload:
-            self._client.table("contact_contributions").insert(payload).execute()
+            self._execute(self._client.table("contact_contributions").insert(payload))
         return len(payload), duplicates
+
+    def _execute(self, request_builder):
+        from postgrest.exceptions import APIError
+
+        try:
+            return request_builder.execute()
+        except APIError as error:
+            code = getattr(error, "code", None)
+            if code == "PGRST205":
+                raise MissingSupabaseSchemaError(
+                    "Supabase is configured, but required tables are missing. "
+                    "Run supabase/schema.sql and supabase/seed.sql in your Supabase SQL editor."
+                ) from error
+            raise
 
 
 def build_repository(settings: Settings) -> BaseRepository:
     if settings.resolved_backend == "supabase":
         try:
+            ensure_schema(settings)
             return SupabaseRepository(settings)
         except ImportError:
             return InMemoryRepository()
