@@ -13,6 +13,7 @@ from TrueID_BE.config import Settings, get_settings
 from TrueID_BE.repository import BaseRepository, MissingSupabaseSchemaError, build_repository
 from TrueID_BE.schemas import (
     HealthResponse,
+    ImportCallerProfilesRequest,
     LookupRequest,
     SpamReportRequest,
     UploadContactsRequest,
@@ -42,6 +43,11 @@ def create_app() -> Starlette:
             Route(
                 f"{settings.api_prefix}/upload-contacts",
                 endpoint=upload_contacts,
+                methods=["POST"],
+            ),
+            Route(
+                f"{settings.api_prefix}/admin/import-caller-profiles",
+                endpoint=import_caller_profiles,
                 methods=["POST"],
             ),
         ],
@@ -81,6 +87,22 @@ async def upload_contacts(request: Request) -> JSONResponse:
     payload = await _parse_body(request, UploadContactsRequest)
     service = get_identity_service()
     response = service.upload_contacts(payload.user_id, payload.contacts)
+    return JSONResponse(response.model_dump(mode="json"))
+
+
+async def import_caller_profiles(request: Request) -> JSONResponse:
+    settings = get_settings()
+    expected_token = settings.profile_import_token
+    provided_token = request.headers.get("x-admin-token")
+
+    if not expected_token:
+        raise HTTPException(status_code=503, detail="Caller profile import is disabled.")
+    if provided_token != expected_token:
+        raise HTTPException(status_code=403, detail="Invalid admin token.")
+
+    payload = await _parse_body(request, ImportCallerProfilesRequest)
+    service = get_identity_service()
+    response = service.import_caller_profiles(payload.profiles)
     return JSONResponse(response.model_dump(mode="json"))
 
 
