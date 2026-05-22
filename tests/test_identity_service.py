@@ -1,6 +1,11 @@
+from types import SimpleNamespace
+
 from fastapi.testclient import TestClient
 
 from TrueID_BE.api import app
+from TrueID_BE.config import get_settings
+from TrueID_BE.repository import InMemoryRepository
+from TrueID_BE.services.identity import IdentityService
 
 
 client = TestClient(app)
@@ -120,3 +125,65 @@ def test_resync_enriches_existing_contribution_region() -> None:
     assert lookup_response.status_code == 200
     payload = lookup_response.json()
     assert payload["location"] == "Osogbo, Osun"
+
+
+def test_import_caller_profiles_endpoint_upserts_with_admin_token(monkeypatch) -> None:
+    monkeypatch.setenv("TRUEID_PROFILE_IMPORT_TOKEN", "test-import-token")
+    get_settings.cache_clear()
+
+    response = client.post(
+        "/api/v1/admin/import-caller-profiles",
+        headers={"x-admin-token": "test-import-token"},
+        json={
+            "profiles": [
+                {
+                    "phone_number": "08035550000",
+                    "display_name": "Prime Dental Clinic",
+                    "city": "Lekki",
+                    "state": "Lagos",
+                    "verified": True,
+                    "is_business": True,
+                    "confidence_score": 88,
+                    "network": "MTN",
+                    "number_status": "NORMAL",
+                    "source_provider": "trusted_partner",
+                }
+            ]
+        },
+    )
+    assert response.status_code == 200
+    assert response.json()["imported"] == 1
+
+    lookup = client.post("/api/v1/lookup", json={"phone_number": "08035550000"})
+    assert lookup.status_code == 200
+    payload = lookup.json()
+    assert payload["name"] == "Prime Dental Clinic"
+    assert payload["location"] == "Lekki, Lagos"
+    assert payload["network"] == "MTN"
+    assert payload["number_status"] == "NORMAL"
+    assert payload["match_strategy"] == "verified_profile"
+
+    monkeypatch.delenv("TRUEID_PROFILE_IMPORT_TOKEN", raising=False)
+    get_settings.cache_clear()
+
+
+def test_lookup_can_include_tirms_signal_without_curated_profile() -> None:
+    repository = InMemoryRepository()
+    settings = get_settings()
+    telecom_registry = SimpleNamespace(
+        lookup=lambda _: SimpleNamespace(
+            number_status="SWAPPED",
+            network="GLOBACOM",
+            verification_status="VERIFIED",
+            request_id="req-123",
+            occurrence_of_status_date="2026-05-22",
+        )
+    )
+    service = IdentityService(repository=repository, settings=settings, telecom_registry=telecom_registry)
+
+    payload = service.lookup("09099990000")
+    assert payload.name == "Unknown caller"
+    assert payload.network == "GLOBACOM"
+    assert payload.number_status == "SWAPPED"
+    assert payload.spam is True
+    assert any(signal.source == "telecom_registry" for signal in payload.sources)
