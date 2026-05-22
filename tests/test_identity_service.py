@@ -187,3 +187,38 @@ def test_lookup_can_include_tirms_signal_without_curated_profile() -> None:
     assert payload.number_status == "SWAPPED"
     assert payload.spam is True
     assert any(signal.source == "telecom_registry" for signal in payload.sources)
+
+
+def test_imported_number_status_can_raise_spam_signal(monkeypatch) -> None:
+    monkeypatch.setenv("TRUEID_PROFILE_IMPORT_TOKEN", "test-import-token")
+    get_settings.cache_clear()
+
+    response = client.post(
+        "/api/v1/admin/import-caller-profiles",
+        headers={"x-admin-token": "test-import-token"},
+        json={
+            "profiles": [
+                {
+                    "phone_number": "08036660000",
+                    "display_name": "Flagged Enterprise",
+                    "city": "Ikeja",
+                    "state": "Lagos",
+                    "verified": True,
+                    "is_business": True,
+                    "confidence_score": 84,
+                    "number_status": "BLACKLISTED",
+                    "source_provider": "trusted_partner",
+                }
+            ]
+        },
+    )
+    assert response.status_code == 200
+
+    lookup = client.post("/api/v1/lookup", json={"phone_number": "08036660000"})
+    assert lookup.status_code == 200
+    payload = lookup.json()
+    assert payload["number_status"] == "BLACKLISTED"
+    assert payload["spam"] is True
+
+    monkeypatch.delenv("TRUEID_PROFILE_IMPORT_TOKEN", raising=False)
+    get_settings.cache_clear()
