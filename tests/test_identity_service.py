@@ -58,3 +58,65 @@ def test_upload_contacts_deduplicates() -> None:
     body = response.json()
     assert body["uploaded"] == 1
     assert body["ignored_duplicates"] == 1
+
+
+def test_lookup_uses_uploaded_contribution_region() -> None:
+    upload_response = client.post(
+        "/api/v1/upload-contacts",
+        json={
+            "user_id": "user_region_test",
+            "contacts": [
+                {
+                    "phone_number": "08170000001",
+                    "contact_name": "Debo Printing Press",
+                    "source_city": "Osogbo",
+                    "source_state": "Osun",
+                }
+            ],
+        },
+    )
+    assert upload_response.status_code == 200
+
+    lookup_response = client.post("/api/v1/lookup", json={"phone_number": "08170000001"})
+    assert lookup_response.status_code == 200
+    payload = lookup_response.json()
+    assert payload["name"] == "Debo Printing Press"
+    assert payload["location"] == "Osogbo, Osun"
+    assert payload["match_strategy"] == "crowd_consensus"
+
+
+def test_resync_enriches_existing_contribution_region() -> None:
+    initial_upload = client.post(
+        "/api/v1/upload-contacts",
+        json={
+            "user_id": "user_region_upgrade",
+            "contacts": [
+                {
+                    "phone_number": "08170000002",
+                    "contact_name": "Tade Workshop",
+                }
+            ],
+        },
+    )
+    assert initial_upload.status_code == 200
+
+    enriched_upload = client.post(
+        "/api/v1/upload-contacts",
+        json={
+            "user_id": "user_region_upgrade",
+            "contacts": [
+                {
+                    "phone_number": "08170000002",
+                    "contact_name": "Tade Workshop",
+                    "source_city": "Osogbo",
+                    "source_state": "Osun",
+                }
+            ],
+        },
+    )
+    assert enriched_upload.status_code == 200
+
+    lookup_response = client.post("/api/v1/lookup", json={"phone_number": "08170000002"})
+    assert lookup_response.status_code == 200
+    payload = lookup_response.json()
+    assert payload["location"] == "Osogbo, Osun"
