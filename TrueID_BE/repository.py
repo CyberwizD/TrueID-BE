@@ -36,6 +36,10 @@ class BaseRepository(ABC):
     def save_contact_contributions(self, contributions: list[ContactContributionRecord]) -> tuple[int, int]:
         raise NotImplementedError
 
+    @abstractmethod
+    def upsert_caller_profiles(self, profiles: list[CallerProfileRecord]) -> int:
+        raise NotImplementedError
+
 
 class InMemoryRepository(BaseRepository):
     def __init__(self) -> None:
@@ -80,6 +84,13 @@ class InMemoryRepository(BaseRepository):
             saved += 1
         return saved, duplicates
 
+    def upsert_caller_profiles(self, profiles: list[CallerProfileRecord]) -> int:
+        imported = 0
+        for profile in profiles:
+            self._profiles[profile.phone_number] = deepcopy(profile)
+            imported += 1
+        return imported
+
 
 class SupabaseRepository(BaseRepository):
     def __init__(self, settings: Settings) -> None:
@@ -110,6 +121,11 @@ class SupabaseRepository(BaseRepository):
             confidence_score=row.get("confidence_score") or 0,
             is_business=bool(row.get("is_business")),
             verified=bool(row.get("verified")),
+            network=row.get("network"),
+            number_status=row.get("number_status"),
+            source_provider=row.get("source_provider"),
+            source_reference=row.get("source_reference"),
+            last_verified_at=_parse_optional_datetime(row.get("last_verified_at")),
             created_at=_parse_datetime(row.get("created_at")),
             updated_at=_parse_datetime(row.get("updated_at")),
         )
@@ -216,6 +232,36 @@ class SupabaseRepository(BaseRepository):
             self._execute(self._client.table("contact_contributions").insert(payload))
         return len(payload), duplicates
 
+    def upsert_caller_profiles(self, profiles: list[CallerProfileRecord]) -> int:
+        if not profiles:
+            return 0
+
+        payload = [
+            {
+                "phone_number": profile.phone_number,
+                "display_name": profile.display_name,
+                "city": profile.city,
+                "state": profile.state,
+                "country": profile.country,
+                "spam_score": profile.spam_score,
+                "confidence_score": profile.confidence_score,
+                "is_business": profile.is_business,
+                "verified": profile.verified,
+                "network": profile.network,
+                "number_status": profile.number_status,
+                "source_provider": profile.source_provider,
+                "source_reference": profile.source_reference,
+                "last_verified_at": profile.last_verified_at.isoformat() if profile.last_verified_at else None,
+                "updated_at": profile.updated_at.isoformat(),
+            }
+            for profile in profiles
+        ]
+
+        self._execute(
+            self._client.table("caller_profiles").upsert(payload, on_conflict="phone_number")
+        )
+        return len(payload)
+
     def _execute(self, request_builder):
         from postgrest.exceptions import APIError
 
@@ -244,4 +290,10 @@ def build_repository(settings: Settings) -> BaseRepository:
 def _parse_datetime(value: str | None) -> datetime:
     if not value:
         return datetime.now(timezone.utc)
+    return datetime.fromisoformat(value.replace("Z", "+00:00"))
+
+
+def _parse_optional_datetime(value: str | None) -> datetime | None:
+    if not value:
+        return None
     return datetime.fromisoformat(value.replace("Z", "+00:00"))
