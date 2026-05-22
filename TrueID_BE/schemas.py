@@ -27,7 +27,7 @@ class LookupRequest(BaseModel):
 
 
 class SourceSignal(BaseModel):
-    source: Literal["profile", "crowd_contact", "spam_reports", "location_hint"]
+    source: Literal["profile", "crowd_contact", "spam_reports", "location_hint", "telecom_registry"]
     weight: int
     label: str
 
@@ -42,6 +42,8 @@ class LookupResponse(BaseModel):
     caller_type: CallerType
     verified: bool = False
     match_strategy: MatchStrategy
+    network: str | None = None
+    number_status: str | None = None
     sources: list[SourceSignal]
 
 
@@ -82,6 +84,35 @@ class UploadContactsResponse(BaseModel):
     ignored_duplicates: int = Field(ge=0)
 
 
+class CuratedCallerProfileInput(BaseModel):
+    phone_number: str = Field(min_length=7, max_length=24)
+    display_name: str = Field(min_length=2, max_length=120)
+    city: str | None = Field(default=None, max_length=80)
+    state: str | None = Field(default=None, max_length=80)
+    country: str = Field(default="Nigeria", min_length=2, max_length=80)
+    spam_score: int = Field(default=0, ge=0, le=100)
+    confidence_score: int = Field(default=60, ge=0, le=100)
+    is_business: bool = False
+    verified: bool = True
+    network: str | None = Field(default=None, max_length=80)
+    number_status: str | None = Field(default=None, max_length=32)
+    source_provider: str = Field(default="curated_import", min_length=2, max_length=80)
+    source_reference: str | None = Field(default=None, max_length=160)
+
+    @field_validator("display_name")
+    @classmethod
+    def strip_display_name(cls, value: str) -> str:
+        return " ".join(value.split())
+
+
+class ImportCallerProfilesRequest(BaseModel):
+    profiles: list[CuratedCallerProfileInput] = Field(min_length=1, max_length=5000)
+
+
+class ImportCallerProfilesResponse(BaseModel):
+    imported: int = Field(ge=0)
+
+
 class HealthResponse(BaseModel):
     status: Literal["ok"]
     environment: str
@@ -99,6 +130,11 @@ class CallerProfileRecord:
     confidence_score: int = 0
     is_business: bool = False
     verified: bool = False
+    network: str | None = None
+    number_status: str | None = None
+    source_provider: str | None = None
+    source_reference: str | None = None
+    last_verified_at: datetime | None = None
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
