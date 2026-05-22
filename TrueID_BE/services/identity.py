@@ -1,15 +1,18 @@
 from __future__ import annotations
 
 from collections import Counter
+from datetime import datetime, timezone
 
 from fastapi import HTTPException
 
 from TrueID_BE.config import Settings
 from TrueID_BE.repository import BaseRepository
 from TrueID_BE.schemas import (
+    CuratedCallerProfileInput,
     CallerProfileRecord,
     ContactContributionInput,
     ContactContributionRecord,
+    ImportCallerProfilesResponse,
     LookupResponse,
     SourceSignal,
     SpamReportRecord,
@@ -18,6 +21,7 @@ from TrueID_BE.schemas import (
 )
 from TrueID_BE.services.location import format_location, infer_location_from_contributions
 from TrueID_BE.services.normalization import normalize_phone_number
+from TrueID_BE.services.telecom_registry import TelecomRegistryResult, TelecomRegistryService
 
 
 BUSINESS_KEYWORDS = {
@@ -49,24 +53,31 @@ SPAM_REASON_WEIGHTS = {
 
 
 class IdentityService:
-    def __init__(self, repository: BaseRepository, settings: Settings) -> None:
+    def __init__(
+        self,
+        repository: BaseRepository,
+        settings: Settings,
+        telecom_registry: TelecomRegistryService | None = None,
+    ) -> None:
         self.repository = repository
         self.settings = settings
+        self.telecom_registry = telecom_registry or TelecomRegistryService(settings)
 
     def lookup(self, phone_number: str) -> LookupResponse:
         normalized_phone = self._normalize_or_raise(phone_number)
         profile = self.repository.get_profile(normalized_phone)
         contributions = self.repository.get_contributions(normalized_phone)
         reports = self.repository.get_spam_reports(normalized_phone)
+        registry_result = self.telecom_registry.lookup(normalized_phone)
 
         top_name, name_votes = self._resolve_name(profile, contributions)
         location = self._resolve_location(profile, contributions)
-        spam_score = self._resolve_spam_score(profile, reports)
+        spam_score = self._resolve_spam_score(profile, reports, registry_result)
         caller_type = self._resolve_caller_type(profile, top_name)
         match_strategy = self._resolve_match_strategy(profile, name_votes)
         confidence = self._resolve_confidence(profile, name_votes, contributions, reports)
 
-        sources = self._resolve_sources(profile, name_votes, contributions, reports, location)
+        sources = self._resolve_sources(profile, name_votes, contributions, reports, location, registry_result)
 
         return LookupResponse(
             phone_number=normalized_phone,
@@ -78,6 +89,8 @@ class IdentityService:
             caller_type=caller_type,
             verified=bool(profile and profile.verified),
             match_strategy=match_strategy,
+            network=self._resolve_network(profile, registry_result),
+            number_status=self._resolve_number_status(profile, registry_result),
             sources=sources,
         )
 
@@ -98,7 +111,7 @@ class IdentityService:
         self.repository.save_spam_report(report)
         reports = self.repository.get_spam_reports(normalized_phone)
         profile = self.repository.get_profile(normalized_phone)
-        spam_score = self._resolve_spam_score(profile, reports)
+        spam_score = self._resolve_spam_score(profile, reports, None)
         return SpamReportResponse(
             phone_number=normalized_phone,
             spam_score=spam_score,
@@ -128,6 +141,33 @@ class IdentityService:
             unique_numbers=unique_numbers,
             ignored_duplicates=duplicates,
         )
+
+    def import_caller_profiles(
+        self,
+        profiles: list[CuratedCallerProfileInput],
+    ) -> ImportCallerProfilesResponse:
+        prepared_profiles = [
+            CallerProfileRecord(
+                phone_number=self._normalize_or_raise(profile.phone_number),
+                display_name=profile.display_name,
+                city=profile.city,
+                state=profile.state,
+                country=profile.country,
+                spam_score=profile.spam_score,
+                confidence_score=profile.confidence_score,
+                is_business=profile.is_business,
+                verified=profile.verified,
+                network=profile.network,
+                number_status=profile.number_status,
+                source_provider=profile.source_provider,
+                source_reference=profile.source_reference,
+                last_verified_at=datetime.now(timezone.utc),
+                updated_at=datetime.now(timezone.utc),
+            )
+            for profile in profiles
+        ]
+        imported = self.repository.upsert_caller_profiles(prepared_profiles)
+        return ImportCallerProfilesResponse(imported=imported)
 
     def _normalize_or_raise(self, phone_number: str) -> str:
         try:
@@ -165,11 +205,22 @@ class IdentityService:
         self,
         profile: CallerProfileRecord | None,
         reports: list[SpamReportRecord],
+        registry_result: TelecomRegistryResult | None,
     ) -> int:
+        status_risk = {
+            "BLACKLISTED": 92,
+            "CHURNED": 68,
+            "REASSIGNED": 62,
+            "SWAPPED": 58,
+        }
         base_score = profile.spam_score if profile else 0
+        if profile and profile.number_status:
+            base_score = max(base_score, status_risk.get(profile.number_status.upper(), 0))
         weighted_reports = sum(SPAM_REASON_WEIGHTS[report.reason] for report in reports)
         report_pressure = min(weighted_reports // 2, 70)
         score = min(100, max(base_score, report_pressure))
+        if registry_result:
+            score = max(score, status_risk.get((registry_result.number_status or "").upper(), 0))
         if profile and profile.verified:
             score = max(0, score - 4)
         return score
@@ -219,6 +270,7 @@ class IdentityService:
         contributions: list[ContactContributionRecord],
         reports: list[SpamReportRecord],
         location: str,
+        registry_result: TelecomRegistryResult | None,
     ) -> list[SourceSignal]:
         sources: list[SourceSignal] = []
         if profile:
@@ -253,7 +305,35 @@ class IdentityService:
                     label="Regional hint from profile or contributor metadata",
                 )
             )
+        if registry_result and (registry_result.number_status or registry_result.network):
+            status_label = registry_result.number_status or "verified"
+            network_label = registry_result.network or "Unknown network"
+            sources.append(
+                SourceSignal(
+                    source="telecom_registry",
+                    weight=18,
+                    label=f"NCC TIRMS verification: {status_label} on {network_label}",
+                )
+            )
         return sources
+
+    def _resolve_network(
+        self,
+        profile: CallerProfileRecord | None,
+        registry_result: TelecomRegistryResult | None,
+    ) -> str | None:
+        if profile and profile.network:
+            return profile.network
+        return registry_result.network if registry_result else None
+
+    def _resolve_number_status(
+        self,
+        profile: CallerProfileRecord | None,
+        registry_result: TelecomRegistryResult | None,
+    ) -> str | None:
+        if profile and profile.number_status:
+            return profile.number_status
+        return registry_result.number_status if registry_result else None
 
 
 def _canonical_name(value: str) -> str:
