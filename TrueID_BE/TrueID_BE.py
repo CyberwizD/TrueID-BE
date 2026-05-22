@@ -193,9 +193,9 @@ def index() -> rx.Component:
                 endpoint_card(
                     "POST",
                     "/api/v1/lookup",
-                    "Looks up a phone number and returns the best-known caller identity, spam status, confidence score, and source signals.",
+                    "Looks up a phone number and returns the best-known caller identity, spam status, confidence score, telecom status, and source signals.",
                     '{\n  "phone_number": "+2348012345678"\n}',
-                    '{\n  "phone_number": "+2348012345678",\n  "name": "John Mechanic",\n  "location": "Lekki, Lagos",\n  "spam": false,\n  "confidence": 91,\n  "spam_score": 18,\n  "caller_type": "business",\n  "verified": true,\n  "match_strategy": "verified_profile",\n  "sources": [\n    {\n      "source": "profile",\n      "weight": 45,\n      "label": "Curated caller profile"\n    }\n  ]\n}',
+                    '{\n  "phone_number": "+2348012345678",\n  "name": "John Mechanic",\n  "location": "Lekki, Lagos",\n  "spam": false,\n  "confidence": 91,\n  "spam_score": 18,\n  "caller_type": "business",\n  "verified": true,\n  "match_strategy": "verified_profile",\n  "network": "MTN",\n  "number_status": "NORMAL",\n  "sources": [\n    {\n      "source": "profile",\n      "weight": 45,\n      "label": "Curated caller profile"\n    },\n    {\n      "source": "telecom_registry",\n      "weight": 18,\n      "label": "NCC TIRMS verification: NORMAL on MTN"\n    }\n  ]\n}',
                 ),
                 endpoint_card(
                     "POST",
@@ -210,6 +210,13 @@ def index() -> rx.Component:
                     "Uploads approved phone contacts from a device installation so the service can build crowdsourced identity consensus.",
                     '{\n  "user_id": "device-4c5c9c54",\n  "contacts": [\n    {\n      "phone_number": "+2348091234567",\n      "contact_name": "Chiamaka Okafor"\n    },\n    {\n      "phone_number": "+2348112223334",\n      "contact_name": "Tolu Dental Clinic"\n    }\n  ]\n}',
                     '{\n  "uploaded": 2,\n  "unique_numbers": 2,\n  "ignored_duplicates": 0\n}',
+                ),
+                endpoint_card(
+                    "POST",
+                    "/api/v1/admin/import-caller-profiles",
+                    "Imports trusted caller profiles from a verified partner dataset or internal curation pipeline. Requires the X-Admin-Token header.",
+                    '{\n  "profiles": [\n    {\n      "phone_number": "+2348035550000",\n      "display_name": "Prime Dental Clinic",\n      "city": "Lekki",\n      "state": "Lagos",\n      "verified": true,\n      "is_business": true,\n      "confidence_score": 88,\n      "network": "MTN",\n      "number_status": "NORMAL",\n      "source_provider": "trusted_partner"\n    }\n  ]\n}',
+                    '{\n  "imported": 1\n}',
                 ),
                 code_panel(
                     "cURL example",
