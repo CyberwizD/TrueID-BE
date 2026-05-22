@@ -20,6 +20,10 @@ class Settings(BaseSettings):
     database_url: str | None = None
     supabase_db_url: str | None = None
     auto_migrate: bool = True
+    profile_import_token: str | None = None
+    tirms_base_url: str = "https://tirms.ncc.gov.ng/api/v1/phone/api"
+    tirms_timeout_seconds: float = 3.0
+    tirms_api_key: str | None = None
 
     @field_validator("environment", mode="before")
     @classmethod
@@ -64,6 +68,10 @@ class Settings(BaseSettings):
     def migration_database_url(self) -> str | None:
         return self.database_url or self.supabase_db_url
 
+    @property
+    def tirms_enabled(self) -> bool:
+        return bool(self.tirms_api_key)
+
 
 @lru_cache
 def get_settings() -> Settings:
@@ -73,6 +81,10 @@ def get_settings() -> Settings:
         supabase_secret_key=_read_passthrough_env("SUPABASE_SECRET_KEY"),
         database_url=_read_passthrough_env("DATABASE_URL"),
         supabase_db_url=_read_passthrough_env("SUPABASE_DB_URL"),
+        profile_import_token=_read_passthrough_env("TRUEID_PROFILE_IMPORT_TOKEN")
+        or _read_passthrough_env("PROFILE_IMPORT_TOKEN"),
+        tirms_api_key=_read_passthrough_env("TRUEID_TIRMS_API_KEY")
+        or _read_passthrough_env("TIRMS_API_KEY"),
     )
 
 
