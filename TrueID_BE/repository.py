@@ -56,8 +56,8 @@ class InMemoryRepository(BaseRepository):
         self._reports.append(deepcopy(report))
 
     def save_contact_contributions(self, contributions: list[ContactContributionRecord]) -> tuple[int, int]:
-        existing_keys = {
-            (item.user_id, item.phone_number, item.contact_name.casefold()) for item in self._contributions
+        existing_by_key = {
+            (item.user_id, item.phone_number, item.contact_name.casefold()): item for item in self._contributions
         }
         saved = 0
         duplicates = 0
@@ -67,11 +67,16 @@ class InMemoryRepository(BaseRepository):
                 contribution.phone_number,
                 contribution.contact_name.casefold(),
             )
-            if key in existing_keys:
+            existing = existing_by_key.get(key)
+            if existing:
+                if contribution.source_city and not existing.source_city:
+                    existing.source_city = contribution.source_city
+                if contribution.source_state and not existing.source_state:
+                    existing.source_state = contribution.source_state
                 duplicates += 1
                 continue
             self._contributions.append(deepcopy(contribution))
-            existing_keys.add(key)
+            existing_by_key[key] = self._contributions[-1]
             saved += 1
         return saved, duplicates
 
@@ -159,26 +164,39 @@ class SupabaseRepository(BaseRepository):
         ))
 
     def save_contact_contributions(self, contributions: list[ContactContributionRecord]) -> tuple[int, int]:
-        grouped_existing = defaultdict(set)
+        grouped_existing = defaultdict(dict)
         phone_numbers = sorted({item.phone_number for item in contributions})
         if phone_numbers:
             response = (
                 self._execute(
                     self._client.table("contact_contributions")
-                    .select("user_id, phone_number, contact_name")
+                    .select("id, user_id, phone_number, contact_name, source_city, source_state")
                     .in_("phone_number", phone_numbers)
                 )
             )
             for row in response.data or []:
-                grouped_existing[row["phone_number"]].add(
-                    (row["user_id"], row["contact_name"].casefold()),
-                )
+                grouped_existing[row["phone_number"]][
+                    (row["user_id"], row["contact_name"].casefold())
+                ] = row
 
         payload = []
         duplicates = 0
         for contribution in contributions:
             existing_key = (contribution.user_id, contribution.contact_name.casefold())
-            if existing_key in grouped_existing[contribution.phone_number]:
+            existing = grouped_existing[contribution.phone_number].get(existing_key)
+            if existing:
+                updates = {}
+                if contribution.source_city and not existing.get("source_city"):
+                    updates["source_city"] = contribution.source_city
+                if contribution.source_state and not existing.get("source_state"):
+                    updates["source_state"] = contribution.source_state
+                if updates:
+                    self._execute(
+                        self._client.table("contact_contributions")
+                        .update(updates)
+                        .eq("id", existing["id"])
+                    )
+                    existing.update(updates)
                 duplicates += 1
                 continue
             payload.append(
@@ -192,7 +210,7 @@ class SupabaseRepository(BaseRepository):
                     "created_at": contribution.created_at.isoformat(),
                 }
             )
-            grouped_existing[contribution.phone_number].add(existing_key)
+            grouped_existing[contribution.phone_number][existing_key] = payload[-1]
 
         if payload:
             self._execute(self._client.table("contact_contributions").insert(payload))
@@ -208,7 +226,7 @@ class SupabaseRepository(BaseRepository):
             if code == "PGRST205":
                 raise MissingSupabaseSchemaError(
                     "Supabase is configured, but required tables are missing. "
-                    "Run supabase/schema.sql and supabase/seed.sql in your Supabase SQL editor."
+                    "Apply the tracked SQL migrations in supabase/migrations or enable automatic migrations."
                 ) from error
             raise
 
