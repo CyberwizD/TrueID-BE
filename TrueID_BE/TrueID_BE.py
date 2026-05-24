@@ -111,6 +111,34 @@ def info_card(title: str, body: str) -> rx.Component:
     )
 
 
+def note_block(title: str, body: str) -> rx.Component:
+    return rx.box(
+        rx.vstack(
+            rx.text(
+                title,
+                color="#d6c3a0",
+                font_size="0.86rem",
+                font_weight="700",
+                text_transform="uppercase",
+                letter_spacing="0.10em",
+            ),
+            rx.text(
+                body,
+                color="#c4cedd",
+                font_size="0.98rem",
+                line_height="1.8",
+            ),
+            spacing="2",
+            align="start",
+        ),
+        width="100%",
+        border="1px solid #242d3a",
+        border_radius="24px",
+        background="#0f151d",
+        padding="24px",
+    )
+
+
 def index() -> rx.Component:
     return rx.box(
         rx.box(
@@ -155,8 +183,8 @@ def index() -> rx.Component:
                     ),
                     rx.text(
                         "Use the same deployment host as your mobile API base URL. "
-                        "The endpoints below describe number lookup, spam reporting, "
-                        "and contact contribution for TrueID integrations.",
+                        "The endpoints below cover live number lookup, spam reporting, "
+                        "contact contribution, and trusted caller-profile enrichment.",
                         color="#9aa5b9",
                         font_size="1.08rem",
                         line_height="1.8",
@@ -173,15 +201,23 @@ def index() -> rx.Component:
                     ),
                     info_card(
                         "Authentication",
-                        "Phase 1 endpoints are unauthenticated. Add your own gateway or auth layer if you expose this publicly.",
+                        "Lookup, spam report, and contact upload are open in Phase 1. The curated profile import endpoint requires X-Admin-Token.",
                     ),
                     info_card(
                         "Privacy",
                         "Responses return caller name, spam risk, and broad location only. Exact residential addresses are not exposed.",
                     ),
+                    info_card(
+                        "Location model",
+                        "TrueID does not guess city or state from a Nigerian phone number. Broad location should come from trusted caller profiles or another verified source.",
+                    ),
                     columns="3",
                     spacing="4",
                     width="100%",
+                ),
+                note_block(
+                    "Lookup flow",
+                    "Lookup first checks curated caller profiles, then falls back to crowdsourced contact names, then optionally attaches NCC TIRMS telecom status and current network. Contacts help with names. Trusted profile imports are what make city/state reliable.",
                 ),
                 endpoint_card(
                     "GET",
@@ -214,16 +250,20 @@ def index() -> rx.Component:
                 endpoint_card(
                     "POST",
                     "/api/v1/admin/import-caller-profiles",
-                    "Imports trusted caller profiles from a verified partner dataset or internal curation pipeline. Requires the X-Admin-Token header.",
-                    '{\n  "profiles": [\n    {\n      "phone_number": "+2348035550000",\n      "display_name": "Prime Dental Clinic",\n      "city": "Lekki",\n      "state": "Lagos",\n      "verified": true,\n      "is_business": true,\n      "confidence_score": 88,\n      "network": "MTN",\n      "number_status": "NORMAL",\n      "source_provider": "trusted_partner"\n    }\n  ]\n}',
+                    "Imports trusted caller profiles from a verified partner dataset or internal curation pipeline. Requires the X-Admin-Token header and is the primary way to supply reliable city/state enrichment.",
+                    '{\n  "profiles": [\n    {\n      "phone_number": "+2348035550000",\n      "display_name": "Prime Dental Clinic",\n      "city": "Lekki",\n      "state": "Lagos",\n      "country": "Nigeria",\n      "verified": true,\n      "is_business": true,\n      "confidence_score": 88,\n      "network": "MTN",\n      "number_status": "NORMAL",\n      "source_provider": "trusted_partner",\n      "source_reference": "partner-batch-2026-05"\n    }\n  ]\n}',
                     '{\n  "imported": 1\n}',
                 ),
                 code_panel(
                     "cURL example",
                     'curl -X POST "$BASE_URL/api/v1/lookup" \\\n  -H "Content-Type: application/json" \\\n  -d \'{\n    "phone_number": "+2348012345678"\n  }\'',
                 ),
+                code_panel(
+                    "Admin import example",
+                    'curl -X POST "$BASE_URL/api/v1/admin/import-caller-profiles" \\\n  -H "Content-Type: application/json" \\\n  -H "X-Admin-Token: $TRUEID_PROFILE_IMPORT_TOKEN" \\\n  -d \'{\n    "profiles": [\n      {\n        "phone_number": "+2348035550000",\n        "display_name": "Prime Dental Clinic",\n        "city": "Lekki",\n        "state": "Lagos",\n        "verified": true,\n        "source_provider": "trusted_partner"\n      }\n    ]\n  }\'',
+                ),
                 rx.text(
-                    "Status codes: 200 for success, 400 for malformed JSON, 422 for validation errors.",
+                    "Status codes: 200 for success, 400 for malformed JSON, 403 for invalid admin token, 422 for validation errors, and 503 when an optional capability is disabled.",
                     color="#7f8aa0",
                     font_size="0.92rem",
                 ),
