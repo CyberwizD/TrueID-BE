@@ -68,7 +68,10 @@ class IdentityService:
         profile = self.repository.get_profile(normalized_phone)
         contributions = self.repository.get_contributions(normalized_phone)
         reports = self.repository.get_spam_reports(normalized_phone)
-        registry_result = self.telecom_registry.lookup(normalized_phone)
+        try:
+            registry_result = self.telecom_registry.lookup(normalized_phone)
+        except Exception:
+            registry_result = None
 
         top_name, name_votes = self._resolve_name(profile, contributions)
         location = self._resolve_location(profile, contributions)
