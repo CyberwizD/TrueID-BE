@@ -189,6 +189,28 @@ def test_lookup_can_include_tirms_signal_without_curated_profile() -> None:
     assert any(signal.source == "telecom_registry" for signal in payload.sources)
 
 
+def test_lookup_falls_back_when_tirms_lookup_fails() -> None:
+    repository = InMemoryRepository()
+    settings = get_settings()
+
+    class FailingTelecomRegistry:
+        def lookup(self, _: str):
+            raise RuntimeError("TIRMS unavailable")
+
+    service = IdentityService(
+        repository=repository,
+        settings=settings,
+        telecom_registry=FailingTelecomRegistry(),
+    )
+
+    payload = service.lookup("08030001111")
+    assert payload.name == "Kora Logistics"
+    assert payload.location == "Victoria Island, Lagos"
+    assert payload.network is None
+    assert payload.number_status is None
+    assert not any(signal.source == "telecom_registry" for signal in payload.sources)
+
+
 def test_imported_number_status_can_raise_spam_signal(monkeypatch) -> None:
     monkeypatch.setenv("TRUEID_PROFILE_IMPORT_TOKEN", "test-import-token")
     get_settings.cache_clear()
