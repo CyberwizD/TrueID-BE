@@ -158,3 +158,12 @@ class SpamReportRecord:
     notes: str | None = None
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     id: str = field(default_factory=lambda: str(uuid4()))
+
+
+@dataclass(slots=True)
+class CallLogRecord:
+    caller_number: str
+    callee_identifier: str | None
+    resolved_name: str
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    id: str = field(default_factory=lambda: str(uuid4()))
