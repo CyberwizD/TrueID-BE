@@ -3,20 +3,27 @@ import reflex as rx
 from TrueID_BE.api import get_repository
 from TrueID_BE.schemas import CallLogRecord
 
+class CallLogDisplay(rx.Base):
+    id: str
+    caller_number: str
+    callee_identifier: str
+    resolved_name: str
+    created_at: str
+
 class AdminState(rx.State):
-    call_logs: list[dict] = []
+    call_logs: list[CallLogDisplay] = []
 
     def load_logs(self):
         repository = get_repository()
         logs = repository.get_call_logs()
         self.call_logs = [
-            {
-                "id": str(log.id),
-                "caller_number": log.caller_number,
-                "callee_identifier": log.callee_identifier or "Unknown",
-                "resolved_name": log.resolved_name,
-                "created_at": log.created_at.strftime("%Y-%m-%d %H:%M:%S")
-            }
+            CallLogDisplay(
+                id=str(log.id),
+                caller_number=log.caller_number or "Unknown",
+                callee_identifier=log.callee_identifier or "Unknown",
+                resolved_name=log.resolved_name or "",
+                created_at=log.created_at.strftime("%Y-%m-%d %H:%M:%S") if log.created_at else "Unknown"
+            )
             for log in logs
         ]
 
@@ -85,10 +92,10 @@ def admin_page() -> rx.Component:
                             rx.foreach(
                                 AdminState.call_logs,
                                 lambda log: rx.table.row(
-                                    rx.table.cell(log["created_at"]),
-                                    rx.table.cell(log["caller_number"]),
-                                    rx.table.cell(log["callee_identifier"]),
-                                    rx.table.cell(log["resolved_name"]),
+                                    rx.table.cell(log.created_at),
+                                    rx.table.cell(log.caller_number),
+                                    rx.table.cell(log.callee_identifier),
+                                    rx.table.cell(log.resolved_name),
                                 )
                             )
                         ),
