@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 
 from TrueID_BE.config import Settings
 from TrueID_BE.migrations import ensure_schema
-from TrueID_BE.schemas import CallerProfileRecord, ContactContributionRecord, SpamReportRecord
+from TrueID_BE.schemas import CallerProfileRecord, ContactContributionRecord, SpamReportRecord, CallLogRecord
 from TrueID_BE.seeds import SEED_CONTRIBUTIONS, SEED_PROFILES, SEED_REPORTS
 
 
@@ -40,12 +40,21 @@ class BaseRepository(ABC):
     def upsert_caller_profiles(self, profiles: list[CallerProfileRecord]) -> int:
         raise NotImplementedError
 
+    @abstractmethod
+    def save_call_log(self, record: CallLogRecord) -> None:
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_call_logs(self) -> list[CallLogRecord]:
+        raise NotImplementedError
+
 
 class InMemoryRepository(BaseRepository):
     def __init__(self) -> None:
         self._profiles = {profile.phone_number: deepcopy(profile) for profile in SEED_PROFILES}
         self._contributions = [deepcopy(item) for item in SEED_CONTRIBUTIONS]
         self._reports = [deepcopy(item) for item in SEED_REPORTS]
+        self._call_logs: list[CallLogRecord] = []
 
     def get_profile(self, phone_number: str) -> CallerProfileRecord | None:
         return deepcopy(self._profiles.get(phone_number))
@@ -90,6 +99,12 @@ class InMemoryRepository(BaseRepository):
             self._profiles[profile.phone_number] = deepcopy(profile)
             imported += 1
         return imported
+
+    def save_call_log(self, record: CallLogRecord) -> None:
+        self._call_logs.append(deepcopy(record))
+
+    def get_call_logs(self) -> list[CallLogRecord]:
+        return [deepcopy(item) for item in self._call_logs]
 
 
 class SupabaseRepository(BaseRepository):
@@ -261,6 +276,35 @@ class SupabaseRepository(BaseRepository):
             self._client.table("caller_profiles").upsert(payload, on_conflict="phone_number")
         )
         return len(payload)
+
+    def save_call_log(self, record: CallLogRecord) -> None:
+        self._execute(self._client.table("call_logs").insert(
+            {
+                "id": record.id,
+                "caller_number": record.caller_number,
+                "callee_identifier": record.callee_identifier,
+                "resolved_name": record.resolved_name,
+                "created_at": record.created_at.isoformat(),
+            }
+        ))
+
+    def get_call_logs(self) -> list[CallLogRecord]:
+        response = self._execute(
+            self._client.table("call_logs")
+            .select("*")
+            .order("created_at", desc=True)
+            .limit(1000)
+        )
+        return [
+            CallLogRecord(
+                id=row["id"],
+                caller_number=row["caller_number"],
+                callee_identifier=row.get("callee_identifier"),
+                resolved_name=row["resolved_name"],
+                created_at=_parse_datetime(row.get("created_at")),
+            )
+            for row in response.data or []
+        ]
 
     def _execute(self, request_builder):
         from postgrest.exceptions import APIError
