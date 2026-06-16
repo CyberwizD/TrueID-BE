@@ -119,5 +119,4 @@ def admin_page() -> rx.Component:
         min_height="100vh",
         position="relative",
         overflow="hidden",
-        on_mount=AdminState.load_logs,
     )
