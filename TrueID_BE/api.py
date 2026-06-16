@@ -67,7 +67,7 @@ async def health_check(_: Request) -> JSONResponse:
 async def lookup_caller(request: Request) -> JSONResponse:
     payload = await _parse_body(request, LookupRequest)
     service = get_identity_service()
-    response = service.lookup(payload.phone_number)
+    response = service.lookup(payload.phone_number, payload.requester_id)
     return JSONResponse(response.model_dump(mode="json"))
 
 
