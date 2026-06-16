@@ -8,10 +8,11 @@ from fastapi import HTTPException
 from TrueID_BE.config import Settings
 from TrueID_BE.repository import BaseRepository
 from TrueID_BE.schemas import (
-    CuratedCallerProfileInput,
+    CallLogRecord,
     CallerProfileRecord,
     ContactContributionInput,
     ContactContributionRecord,
+    CuratedCallerProfileInput,
     ImportCallerProfilesResponse,
     LookupResponse,
     SourceSignal,
@@ -63,7 +64,7 @@ class IdentityService:
         self.settings = settings
         self.telecom_registry = telecom_registry or TelecomRegistryService(settings)
 
-    def lookup(self, phone_number: str) -> LookupResponse:
+    def lookup(self, phone_number: str, requester_id: str | None = None) -> LookupResponse:
         normalized_phone = self._normalize_or_raise(phone_number)
         profile = self.repository.get_profile(normalized_phone)
         contributions = self.repository.get_contributions(normalized_phone)
@@ -81,6 +82,13 @@ class IdentityService:
         confidence = self._resolve_confidence(profile, name_votes, contributions, reports)
 
         sources = self._resolve_sources(profile, name_votes, contributions, reports, location, registry_result)
+
+        call_log = CallLogRecord(
+            caller_number=normalized_phone,
+            callee_identifier=requester_id,
+            resolved_name=top_name
+        )
+        self.repository.save_call_log(call_log)
 
         return LookupResponse(
             phone_number=normalized_phone,
