@@ -1,7 +1,7 @@
 import reflex as rx
 
 from TrueID_BE.api import app as fastapi_app
-from TrueID_BE.pages.admin import admin_page
+from TrueID_BE.pages.admin import admin_page, AdminState
 
 
 def code_panel(title: str, body: str) -> rx.Component:
@@ -284,4 +284,4 @@ def index() -> rx.Component:
 
 app = rx.App(api_transformer=fastapi_app)
 app.add_page(index, title="TrueID API Docs")
-app.add_page(admin_page, route="/admin", title="TrueID Admin")
+app.add_page(admin_page, route="/admin", title="TrueID Admin", on_load=AdminState.load_logs)
