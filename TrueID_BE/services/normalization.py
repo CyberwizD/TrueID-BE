@@ -12,6 +12,8 @@ def normalize_phone_number(phone_number: str, default_country_code: str = "234")
         normalized_digits = f"{default_country_code}{digits[1:]}"
     elif digits.startswith("00"):
         normalized_digits = digits[2:]
+    elif len(digits) == 10:
+        normalized_digits = f"{default_country_code}{digits}"
     else:
         normalized_digits = digits
 
