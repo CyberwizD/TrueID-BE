@@ -26,6 +26,17 @@ class AdminState(rx.State):
             )
             for log in logs
         ]
+        
+        if not self.call_logs:
+            self.call_logs = [
+                CallLogDisplay(
+                    id="dummy",
+                    caller_number="No DB Connection",
+                    callee_identifier="Or empty table",
+                    resolved_name="Check .env vars",
+                    created_at="Now"
+                )
+            ]
 
 
 def admin_page() -> rx.Component:
@@ -73,6 +84,13 @@ def admin_page() -> rx.Component:
                         "View all recent lookup requests processed by the backend.",
                         color="#9aa5b9",
                         font_size="1.08rem",
+                    ),
+                    rx.button(
+                        "Refresh Logs",
+                        on_click=AdminState.load_logs,
+                        color_scheme="blue",
+                        variant="soft",
+                        margin_top="10px",
                     ),
                     spacing="4",
                     align="start",
