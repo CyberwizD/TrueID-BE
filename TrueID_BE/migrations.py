@@ -12,7 +12,7 @@ class MigrationFile:
     path: Path
 
 
-MIGRATIONS_DIR = Path(__file__).resolve().parent.parent / "supabase" / "migrations"
+MIGRATIONS_DIR = Path(__file__).resolve().parent.parent / "supabase_db" / "migrations"
 
 
 def ensure_schema(settings: Settings) -> None:
